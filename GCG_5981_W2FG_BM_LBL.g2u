@@ -1,0 +1,88 @@
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.Try
+V.Local.iRet.Declare
+
+'TJS, May 2020
+'Customer: Hawkeye Industries
+'BUSINESS CASE: The customer is getting WIP TO FG BOM 
+'modified to honor the auto lot functions from advanced 
+'inventory options. They would like a WIP to FG Label 
+'exactly like the standard label to print on the post 
+'OK hook of this screen.
+
+'Hook:  27807, Shop Floor Control > Transactions > WIP to Finished Goods (BOM) Post OK
+
+F.Intrinsic.Control.If(V.Caller.Hook,=,"27807")
+	F.Intrinsic.UI.Msgbox("Print Labels?","WIP to FG (BOM) Labels",4,V.Local.iRet)
+	F.Intrinsic.Control.If(V.Local.iRet,=,6)
+		F.Intrinsic.Control.CallSub(Data)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(Error,"SubRoutine",V.Ambient.CurrentSubroutine,"eNumber",V.Ambient.ErrorNumber,"eDescription",V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.Data.Start
+F.Intrinsic.Control.Try
+V.Local.sSQL.Declare
+V.Local.iRunID.Declare
+V.Local.iRptID.Declare
+V.Local.iLogID.Declare
+V.Local.iRET.Declare
+
+F.Intrinsic.Control.If(V.DataTable.dtWIP.Exists)
+	F.Data.DataTable.Close("dtWIP")
+F.Intrinsic.Control.EndIf
+
+F.Global.BI.GetRunID(V.Local.iRunId)
+
+F.Global.BI.GetIDFromName("GCG_5981_W2FG.lab",V.Local.iRptID)
+
+F.Global.BI.StartLogging(V.Local.iRunId,V.Local.iRptID,-1,"",V.Local.iLogID)
+
+F.ODBC.Connection!conts.OpenCompanyConnection
+F.Intrinsic.String.Build("Select TOP 1 A.QUANTITY as QTY_ON_LBL,RTRIM(A.BIN) as BIN,RTRIM(A.HEAT) as HEAT,RTRIM(A.LOT) as LOT,RTRIM(LEFT(A.PART,17)) as PART,RTRIM(LTRIM(RIGHT(A.PART,3))) as REV,RTRIM(B.DESCRIPTION) as DESCR,RTRIM(A.SERIAL_NUMBER) as SERIAL,RTRIM(A.ORDER_NO) as SO,RTRIM(A.ORDER_LINE) as SO_LINE,RTRIM(A.USERID) as USER_ID, RTRIM(A.JOB) as WO,RTRIM(A.SEQUENCE) as WO_SEQ,RTRIM(A.SUFFIX) as WO_SUFFIX,' ' AS BIRUNID from V_ITEM_HISTORY A left join V_INVENTORY_MSTR B on B.PART = A.PART where RTRIM(A.JOB) = '{0}' and A.SUFFIX in ('000','') AND A.CODE_TRANSACTION = 'J52' and A.QUANTITY > 0 order by A.TIME_ITEM_HISTORY desc;",V.Passed.000001,V.Local.sSQL)
+
+F.Intrinsic.Control.If(V.Local.sSQL.Trim,=,"")
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndIf
+
+F.Data.DataTable.CreateFromSQL("dtWIP","conts",V.Local.sSQL,True)
+
+F.Data.DataTable.SetValue("dtWIP",-1,"BIRUNID",V.Local.iRunID)
+
+F.Global.BI.StopLogging(V.Local.iLogID)
+
+F.Global.BI.PrintCodesoftLabelFromDatatable(V.Local.iRunID,V.Local.iLogID,"dtWIP","",True)
+
+F.ODBC.Connection!conts.Close
+
+F.Intrinsic.UI.Msgbox("Reprint labels?", "WIP to FG (BOM) Labels",4,V.Local.iRET)
+
+F.Intrinsic.Control.If(V.Local.iRET,=,6)
+	F.Intrinsic.Control.CallSub(Data)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(Error,"SubRoutine",V.Ambient.CurrentSubroutine,"eNumber",V.Ambient.ErrorNumber,"eDescription",V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.Data.End
+
+Program.Sub.Error.Start
+V.Local.sError.Declare
+V.Local.iRet.Declare
+V.Local.sSep.Declare
+
+F.Intrinsic.String.Build("-------------------------------------------------------------------------------------",,V.Local.sSep)
+F.Intrinsic.String.Build("({5}-{6}){0}{7}{0}Project: {4}{0}{7}{0}Sub: {1}{0}Error: {2}, {3}", V.Ambient.NewLine, V.Args.SubRoutine, V.Args.eNumber, V.Args.eDescription,V.Caller.ScriptFile,V.Ambient.Date, V.Ambient.Time,V.Local.sSep,V.Local.sError)
+F.Intrinsic.UI.Msgbox(V.Local.sError,"Error",V.Local.iRet)
+Program.Sub.Error.End
